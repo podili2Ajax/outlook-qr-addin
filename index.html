@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Appointment QR</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js" type="text/javascript"></script>
+    <script src="qrcode.min.js"></script>
+    <link href="styles.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+
+    <div id="setup-screen" class="screen">
+        <h2>One-Time Setup</h2>
+        <p class="hint">Enter your office details. These are saved securely in your Outlook account.</p>
+        
+        <label>Profession / Title</label>
+        <input type="text" id="cfg-profession" placeholder="e.g. Dentist, Lawyer" />
+
+        <label>Business Name</label>
+        <input type="text" id="cfg-name" placeholder="e.g. Smile Clinic" />
+
+        <label>Office Address</label>
+        <input type="text" id="cfg-address" placeholder="123 Main St, City, Country" />
+
+        <label>Contact Phone/Email</label>
+        <input type="text" id="cfg-contact" placeholder="For changes call..." />
+
+        <button id="btn-save" onclick="saveSettings()">Save Securely</button>
+    </div>
+
+    <div id="qr-screen" class="screen" style="display:none;">
+        <div class="header">
+            <h2 id="appt-date">Loading...</h2>
+            <p id="appt-time">Please wait</p>
+        </div>
+
+        <div id="qrcode-container"></div>
+
+        <div class="actions">
+            <p class="small-text">Scan with Phone Camera</p>
+            <button onclick="printQR()" class="secondary-btn">🖨️ Print for Patient</button>
+            <button onclick="clearSettings()" class="link-btn">⚙️ Settings</button>
+        </div>
+    </div>
+
+    <script>
+        Office.onReady((info) => {
+            if (info.host === Office.HostType.Outlook) {
+                checkConfiguration();
+            }
+        });
+
+        // --- 1. CONFIGURATION LOGIC ---
+        function checkConfiguration() {
+            const settings = Office.context.roamingSettings.get("qrConfig");
+            if (settings) {
+                // Config exists, load the Appointment View
+                document.getElementById('setup-screen').style.display = 'none';
+                document.getElementById('qr-screen').style.display = 'block';
+                loadAppointmentData(settings);
+            } else {
+                // No config, show Setup View
+                document.getElementById('setup-screen').style.display = 'block';
+                document.getElementById('qr-screen').style.display = 'none';
+            }
+        }
+
+        function saveSettings() {
+            // SECURITY: Sanitize Inputs (Hack-Proofing)
+            const config = {
+                profession: cleanInput(document.getElementById('cfg-profession').value),
+                name: cleanInput(document.getElementById('cfg-name').value),
+                address: cleanInput(document.getElementById('cfg-address').value),
+                contact: cleanInput(document.getElementById('cfg-contact').value)
+            };
+
+            if(!config.name || !config.address) {
+                alert("Please fill in Business Name and Address.");
+                return;
+            }
+
+            // Save to Outlook Roaming Settings
+            Office.context.roamingSettings.set("qrConfig", config);
+            Office.context.roamingSettings.saveAsync((result) => {
+                if (result.status === Office.AsyncResultStatus.Succeeded) {
+                    checkConfiguration(); // Reload
+                } else {
+                    alert("Error saving settings.");
+                }
+            });
+        }
+
+        function clearSettings() {
+            Office.context.roamingSettings.remove("qrConfig");
+            Office.context.roamingSettings.saveAsync(checkConfiguration);
+        }
+
+        function cleanInput(text) {
+            // Remove dangerous characters
+            if (!text) return "";
+            return text.replace(/[<>;{}]/g, "").trim();
+        }
+
+        // --- 2. APPOINTMENT LOGIC ---
+        function loadAppointmentData(config) {
+            const item = Office.context.mailbox.item;
+
+            // Get Times
+            const startDate = item.start;
+            const endDate = item.end;
+            
+            // Format for Display
+            document.getElementById('appt-date').innerText = startDate.toLocaleDateString();
+            document.getElementById('appt-time').innerText = 
+                startDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+            // Get Outlook ID (For Rescheduling Logic)
+            const itemId = item.itemId; 
+            const uid = generateHash(itemId); // Deterministic ID
+
+            // Generate Payload
+            const payload = buildICalString(uid, startDate, endDate, config);
+            
+            // Render QR
+            document.getElementById('qrcode-container').innerHTML = "";
+            new QRCode(document.getElementById("qrcode-container"), {
+                text: payload,
+                width: 260,
+                height: 260,
+                correctLevel: QRCode.CorrectLevel.M
+            });
+        }
+
+        // --- 3. DATA PAYLOAD GENERATION ---
+        function buildICalString(uid, start, end, config) {
+            // TIME ZONES: Convert to UTC format (YYYYMMDDTHHmmSSZ)
+            const fmt = (d) => d.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+
+            return `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//${config.name}//EN
+BEGIN:VEVENT
+UID:qr-${uid}@offline
+DTSTAMP:${fmt(new Date())}
+DTSTART:${fmt(start)}
+DTEND:${fmt(end)}
+SUMMARY:${config.profession}: ${config.name}
+LOCATION:${config.address}
+DESCRIPTION:Address: ${config.address}\\nContact: ${config.contact}\\n\\nTo reschedule, please contact the office directly.
+BEGIN:VALARM
+TRIGGER:-P2D
+ACTION:DISPLAY
+DESCRIPTION:Reminder: Appointment in 2 Days
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-P1D
+ACTION:DISPLAY
+DESCRIPTION:Reminder: Appointment Tomorrow
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT2H
+ACTION:DISPLAY
+DESCRIPTION:Reminder: Appointment in 2 Hours
+END:VALARM
+END:VEVENT
+END:VCALENDAR`;
+        }
+
+        function generateHash(str) {
+            // Simple hash to make a consistent ID from the long Outlook ID
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = (hash << 5) - hash + char;
+                hash |= 0; 
+            }
+            return Math.abs(hash);
+        }
+
+        function printQR() {
+            const qrHTML = document.getElementById('qrcode-container').innerHTML;
+            const win = window.open('', '', 'width=400,height=500');
+            win.document.write(`<html><body style="text-align:center; font-family:sans-serif;">
+                <h2>Scan to Add to Calendar</h2>
+                ${qrHTML}
+                <br>
+                <p>Use your Phone Camera</p>
+            </body></html>`);
+            win.print();
+        }
+    </script>
+</body>
+</html>
