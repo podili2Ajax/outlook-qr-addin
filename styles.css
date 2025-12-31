@@ -1,0 +1,80 @@
+body {
+    font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f3f2f1;
+    color: #323130;
+    text-align: center;
+}
+
+.screen {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+h2 {
+    font-size: 18px;
+    margin-top: 0;
+    color: #0078d4; /* Outlook Blue */
+}
+
+input {
+    width: 100%;
+    padding: 8px;
+    margin: 8px 0 16px 0;
+    box-sizing: border-box;
+    border: 1px solid #8a8886;
+    border-radius: 4px;
+}
+
+label {
+    display: block;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+button {
+    background-color: #0078d4;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    width: 100%;
+    margin-top: 10px;
+}
+
+button:hover {
+    background-color: #106ebe;
+}
+
+.secondary-btn {
+    background-color: white;
+    border: 1px solid #0078d4;
+    color: #0078d4;
+}
+
+.link-btn {
+    background: none;
+    border: none;
+    color: #605e5c;
+    text-decoration: underline;
+    font-size: 12px;
+    margin-top: 20px;
+}
+
+#qrcode-container {
+    margin: 20px auto;
+    display: flex;
+    justify-content: center;
+}
+
+.hint {
+    font-size: 12px;
+    color: #605e5c;
+    margin-bottom: 20px;
+}
