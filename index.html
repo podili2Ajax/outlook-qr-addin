@@ -68,7 +68,15 @@
         }
 
         function saveSettings() {
-            // SECURITY: Sanitize Inputs (Hack-Proofing)
+            // 1. Get the button so we can change its text
+            const btn = document.getElementById('btn-save');
+            
+            // 2. VISUAL FEEDBACK: Change text to "Saving..." and disable click
+            btn.innerText = "Saving...";
+            btn.disabled = true;
+            btn.style.backgroundColor = "#666"; // Grey out button
+
+            // 3. Sanitize Inputs
             const config = {
                 profession: cleanInput(document.getElementById('cfg-profession').value),
                 name: cleanInput(document.getElementById('cfg-name').value),
@@ -78,20 +86,37 @@
 
             if(!config.name || !config.address) {
                 alert("Please fill in Business Name and Address.");
+                // Reset button
+                btn.innerText = "Save Securely";
+                btn.disabled = false;
+                btn.style.backgroundColor = "#0078d4";
                 return;
             }
 
-            // Save to Outlook Roaming Settings
+            // 4. Save to Outlook
             Office.context.roamingSettings.set("qrConfig", config);
+            
             Office.context.roamingSettings.saveAsync((result) => {
                 if (result.status === Office.AsyncResultStatus.Succeeded) {
-                    checkConfiguration(); // Reload
+                    // SUCCESS: Show "Saved!" for 1 second, then switch screens
+                    btn.innerText = "✅ Saved Successfully!";
+                    btn.style.backgroundColor = "green";
+                    
+                    setTimeout(() => {
+                        checkConfiguration(); // Switch to QR view
+                    }, 1000);
                 } else {
-                    alert("Error saving settings.");
+                    // ERROR: Show what went wrong
+                    console.error(result.error);
+                    alert("Error saving: " + JSON.stringify(result.error));
+                    
+                    // Reset button so they can try again
+                    btn.innerText = "Save Securely";
+                    btn.disabled = false;
+                    btn.style.backgroundColor = "#0078d4";
                 }
             });
         }
-
         function clearSettings() {
             Office.context.roamingSettings.remove("qrConfig");
             Office.context.roamingSettings.saveAsync(checkConfiguration);
@@ -193,3 +218,4 @@ END:VCALENDAR`;
     </script>
 </body>
 </html>
+
